@@ -1,0 +1,54 @@
+#!/bin/bash
+
+MODE=${1}
+DEV=wlan0
+DHCP_CLIENT=dhcpcd
+WPA_SUPPLICANT_CONFIG=/etc/wpa_supplicant/wpa_supplicant.conf
+HOSTAPD_CONFIG=/etc/hostapd/hostapd.conf
+
+
+function start_client {
+  ip link set dev $DEV up
+  wpa_supplicant -B -D wext -i $DEV -c $WPA_SUPPLICANT_CONFIG
+  $DHCP_CLIENT $DEV
+}
+
+function stop_client {
+  wpa_cli terminate
+  ip addr flush dev $DEV
+  ip route flush dev $DEV
+}
+
+function start_access_point {
+  ip link set dev $DEV up
+  ip addr add 10.0.1.1/24 dev $DEV
+  sleep 2
+
+  dnsmasq
+  hostapd  $HOSTAPD_CONFIG &
+}
+
+function stop_access_point {
+  killall hostapd
+  killall dnsmasq
+  ip addr flush dev $DEV
+  ip route flush dev $DEV
+}
+
+function stop_all {
+  stop_client
+  stop_access_point
+}
+
+if [ "$MODE" = "client" ]; then
+  stop_access_point
+  start_client
+elif [ "$MODE" = "ap" ]; then
+  stop_client
+  start_access_point
+elif [ "$MODE" = "stop" ]; then
+  stop_all
+else
+  echo "Invalid mode"
+fi
+
